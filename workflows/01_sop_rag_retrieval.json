@@ -1,0 +1,213 @@
+{
+  "name": "SOP_RAG_Retrieval_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1040,
+        -48
+      ],
+      "id": "f7732250-923d-4add-ae30-7321eff333e5",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// This node builds the search sentence for Qdrant\n// Synchronized with our clean input normalizer payload schema\nconst archetype = $json.problem_archetype;\nconst drivers = $json.drivers || [];\n\n// Create a clean list of human descriptions, falling back to the feature name if \"N/A\"\nconst causePhrases = drivers\n    .map(d => (d.description && d.description !== \"N/A\") ? d.description : d.feature)\n    .join(', ');\n\nreturn {\n    // This is the \"Semantic Query\" optimized for the embedding engine\n    rag_query: `Standard operating procedure for ${archetype} issues, specifically addressing ${causePhrases}.`,\n    \n    // Pass everything else through completely intact (mapped_domain, order_details, drivers, etc.)\n    ...$json \n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        -48
+      ],
+      "id": "f799fb23-9f09-440c-bb84-993d24affb8c",
+      "name": "Query Constructor"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "nomic-embed-text"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "nomic-embed-text"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.rag_query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -464,
+        -48
+      ],
+      "id": "6ffafdd4-fcab-4f21-ad3b-dda52c9efd23",
+      "name": "Embedding Query"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:6333/collections/dataco_supply_chain_sops/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "vector",
+              "value": "={{ $json.embedding }}"
+            },
+            {
+              "name": "limit",
+              "value": "={{ 3 }}"
+            },
+            {
+              "name": "with_payload",
+              "value": "={{ true }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -272,
+        -48
+      ],
+      "id": "02053005-8239-43c6-b0f4-9a11e8f0ea6b",
+      "name": "Get Data from Qdrant"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// In 'Run once for each item' mode, n8n automatically unpacks the item into $json\nconst data = $json.body ? $json.body : $json;\n\n// Check for core operational parameters to prevent execution drops\nif (!data || !data.order_id) {\n    throw new Error(\"SOP Retrieval Subflow Error: Missing core order data package.\");\n}\n\n// Pass forward the clean data structures, capturing the new symbolic anchor domain\nreturn {\n    order_id: data.order_id,\n    problem_archetype: data.problem_archetype,\n    archetype_description: data.archetype_description,\n    mapped_domain: data.mapped_domain, // Driven forward for Qdrant metadata filtering\n    order_details: data.order_details,\n    \n    // FIX: Read 'source_drivers' if 'drivers' is blank, ensuring the array is never lost\n    drivers: data.drivers || data.source_drivers || [],\n\n    // ─── STATE ARRAYS: Carry tracking telemetry forward safely ───\n    audit_round: data.audit_round || 1,\n    is_reflection: data.is_reflection || false,\n    rejection_reasons_log: data.rejection_reasons_log || \"\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        -48
+      ],
+      "id": "bbc59277-abfe-4d26-87df-eef0a3f5df1a",
+      "name": "SOP_Normalize_Input"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. In 'Run once for each item' mode, the raw response from Qdrant is already unpacked into $json\nconst qdrantResults = $json.result || [];\n\n// 2. Extract and join the text from each chunk's payload dynamically\nconst combinedSOPs = qdrantResults.map((hit, index) => {\n  const textContent = hit.payload && hit.payload.text ? hit.payload.text : \"No policy text found.\";\n  const sourceFile = hit.payload && hit.payload.source ? hit.payload.source : \"SOP Document v1.1\";\n  return `[SOP Source ${index + 1} | File: ${sourceFile}]:\\n${textContent}`; \n}).join('\\n\\n');\n\n// FALLBACK PROTECTION: If Qdrant returns 0 hits, prevent the downstream agent from hallucinating rules\nconst safeSOPContext = combinedSOPs.trim() ? combinedSOPs : \"CRITICAL WARNING: No matching corporate governance clauses found in database for this domain. Fallback strictly to manual human operator escalation.\";\n\n// 3. FIXED: Pull the original data suitcase from the entry node of this subflow\n// This guarantees we get our pristine incoming variables back, independent of Qdrant's output structure.\nconst originalData = $('SOP_Normalize_Input').item.json;\n\n// 4. Return the Final \"Agent-Ready\" comprehensive data envelope\nreturn {\n  order_id: originalData.order_id,\n  problem_archetype: originalData.problem_archetype,\n  mapped_domain: originalData.mapped_domain, // Carried forward to justify choices to the Evaluator Agent\n  sop_context: safeSOPContext,                // Pure, clean, parsed text for the Planner Agent to read\n  order_details: originalData.order_details,  // Full semantic suitcase intact\n\n  // DOUBLE-CHECK ALIGNMENT: Defensively catch both names to ensure drivers are never wiped out\n  drivers: originalData.drivers || originalData.source_drivers || [],        \n\n  // ─── STATE ARRAYS: Forward telemetry suitcase variables cleanly back to the main canvas workflow ───\n  audit_round: originalData.audit_round || 1,\n  is_reflection: originalData.is_reflection || false,\n  rejection_reasons_log: originalData.rejection_reasons_log || \"\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        -48
+      ],
+      "id": "369a41f2-398b-4ff4-a6e6-3d0964168911",
+      "name": "SOP_Normalize_Output"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "SOP_Normalize_Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Constructor": {
+      "main": [
+        [
+          {
+            "node": "Embedding Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding Query": {
+      "main": [
+        [
+          {
+            "node": "Get Data from Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data from Qdrant": {
+      "main": [
+        [
+          {
+            "node": "SOP_Normalize_Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SOP_Normalize_Input": {
+      "main": [
+        [
+          {
+            "node": "Query Constructor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "dd4031d5-c3af-4c9a-948a-018ce99aa3b2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b11aa79029b222ded93a211ae016ef4d75181caec9a7e8d0a3bc40afe8287f7b"
+  },
+  "id": "cdjmQFhJ9M95oG1p",
+  "tags": []
+}

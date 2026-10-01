@@ -1,0 +1,229 @@
+{
+  "name": "Planner_Agent_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        48
+      ],
+      "id": "bd759445-45cc-47f1-9b73-ae8fb8464ae2",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.is_reflection ? \"### REFLEXION FEEDBACK PROTOCOL ACTIVATED:\\n\" + $json.feedback_instruction : \"### MODE: INITIAL_PLANNING\" }}\n\n### INPUT DATA\n- Order ID: {{ $json.order_id }}\n- Policy Domain: {{ $json.mapped_domain }} <─── [CRITICAL BOUNDARY LENS]\n- Archetype: {{ $json.problem_archetype }}\n- ML Drivers: {{ JSON.stringify($json.drivers) }}\n- SOP Context: {{ $json.sop_context }}\n\n### TASK\nSynthesize a mitigation plan[cite: 2]. Map the Drivers to the SOP[cite: 2]. \nInternal Fields: Ensure logic_rationale and sop_ref are technically accurate, structurally grounded in the SOP, and strictly relevant to the governing rules of the {{ $json.mapped_domain }} domain[cite: 2].\n\n[CRITICAL ARCHETYPE POLICY CONSTRAINTS]:\nYou must strictly follow the mapped operational constraints in the SOP[cite: 2]:\n- Execution: Limit actions to operational interventions or shipping adjustments where feasible (Step 2)[cite: 2].\n- Planning: Prioritize customer notification, expectation management, or delivery re-commitment. Do NOT upgrade shipping (Step 2/7.2)[cite: 2].\n- Administrative/Payment (Type_TRANSFER): Shipping upgrades are LOGICALLY INAPPROPRIATE[cite: 2]. Action must focus strictly on administrative clearance or escalation (Step 5/7.2)[cite: 2].\n- Product/Financial (Order Item Id): Prioritize physical handling constraints and margin protection. Expediting is restricted for low-margin SKUs (Step 3 & 4)[cite: 2].\n- Temporal/Operational (ship_hour): Evaluate warehouse cutoff times. Expediting is ONLY permitted if the dispatch window is still open (Step 2 & 6)[cite: 2].\n- Geographic: Account for regional customs or regulatory limits[cite: 2]. If a bypass is impossible, escalation is MANDATORY (Step 6/7.2)[cite: 2].\n\nExternal Field: Ensure customer_communication is warm and human. Imagine you are a helpful customer success lead. Do NOT mention SOPs, domains, or technical drivers to the customer.\n\nIDENTIFICATION: The identified_driver field in your JSON output MUST be exactly: {{ $json.problem_archetype }}.\n\nMAPPING: In your JSON output's `symbolic_mapping` field, explicitly detail how the technical Archetype anchors directly into the standard regulations of the {{ $json.mapped_domain }} domain[cite: 2]. Use the SHAP drivers provided in ML Drivers to explain the \"why,\" but the \"who\" (the driver name) must remain the Archetype.\n\nCONCISENESS & STRUCTURE: Keep logic_rationale under 40 words. \nYou MUST use this exact structural formula to guarantee an audit pass:\n\"ML Driver [Name] caused the logistics failure by [Impact]. Therefore, SOP Section [X] requires [Action], which directly resolves the issue via Steps [Numbers].\"\n\n### OUTPUT JSON FORMAT\n{\n  \"identified_driver\": \"string\",\n  \"symbolic_mapping\": \"string\",\n  \"logic_rationale\": \"string\",\n  \"proposed_steps\": [\n    { \"step\": 1, \"action\": \"string\", \"sop_ref\": \"string\" }\n  ],\n  \"customer_communication\": \"string\",\n  \"escalation_flag\": false\n}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the DataCo Neuro-Symbolic Logistics Engine. Your role is to bridge the gap between Neural AI (ML drivers) and Symbolic Knowledge (SOP rules) within structurally isolated corporate policy domains.   ### OPERATIONAL RULES  1. GROUNDING: Every proposed action MUST cite a specific section or source from the provided SOP context. 2. REASONING: Explain the logic connecting the ML driver to the specific SOP requirement, ensuring the resolution stays strictly within the boundaries of the designated operational domain. 3. STRICT POLICY ADHERENCE: You must select resolution paths that directly match the qualitative strategy dictated by the identified Archetype in SOP Step 7.2. Do not extrapolate, invent numeric thresholds, or introduce industry-standard assumptions not present in the text. 4. STRUCTURE: Output ONLY a single, valid JSON object.  5. START: Your response MUST begin with the character '{'.  6. TERMINATION: Your response MUST end immediately after the final closing brace '}'.   ### CRITICAL CONSTRAINTS  - DO NOT use markdown code blocks (NO ```json).  - DO NOT add any text, markers, or conversational filler.  - DO NOT repeat phrases from examples.  - DO NOT provide a pre-amble or post-amble.   ### REFLEXION PROTOCOL  If the input includes \"REFLEXION FEEDBACK,\" you MUST prioritize fixing the specific symbolic or domain boundary violations listed while maintaining the rest of the plan's integrity.   7. TRACEABILITY: You are an expert at following data schemas. The identified_driver field in your JSON output MUST be exactly \"{{ $json.problem_archetype }}\". Do not substitute, hallucinate, or change this value. It is the primary key for this dynamic diagnostic run."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        480,
+        -16
+      ],
+      "id": "e95d7411-62d1-46cb-88c2-fc073cd3ecfe",
+      "name": "LLM_Planner"
+    },
+    {
+      "parameters": {
+        "model": "phi3:mini",
+        "options": {
+          "temperature": 0,
+          "numPredict": 2048
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        480,
+        160
+      ],
+      "id": "16285b90-99b5-42e7-96f1-d93374cfb987",
+      "name": "LLM_Phi3_Planner",
+      "credentials": {
+        "ollamaApi": {
+          "id": "lmXWBQL7Qzbc0gz2",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * PLANNER OUTPUT NORMALIZER (v10.13 - Placeholder Ghost Text Purged)\n * Responsibility: Extracting JSON from LLM while preserving the active loop state.\n * Execution Mode: Run once for each item.\n */\n\n// 1. STATE RECOVERY (Targeted to local Subflow Trigger node)\nconst incomingContext = $(\"When Executed by Another Workflow\").item.json;\n\nconst orderDetails = incomingContext.order_details;\nconst currentRound = incomingContext.audit_round || 1; \nconst isReflection = incomingContext.is_reflection || false;\nconst archetype = incomingContext.problem_archetype;\nconst drivers = incomingContext.drivers || [];\nconst sopContext = incomingContext.sop_context;\nconst mappedDomain = incomingContext.mapped_domain || \"General\";\n\n// ─── FIXED: Force an absolute empty string default instead of the text placeholder ───\nconst rejectionReasonsLog = incomingContext.rejection_reasons_log || \"\";\n\nlet rawText = $json.text || \"\";\n\n// 2. EXTRACT JSON BLOCK\nconst startIdx = rawText.indexOf('{');\nconst endIdx = rawText.lastIndexOf('}');\n\nif (startIdx === -1 || endIdx === -1) {\n    return { \n        error: \"No JSON object found\", \n        raw_text: rawText,\n        order_details: orderDetails,\n        audit_round: currentRound,\n        is_reflection: isReflection,\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        rejection_reasons_log: rejectionReasonsLog\n    };\n}\n\nlet cleanJson = rawText.substring(startIdx, endIdx + 1).trim();\n\n// 3. PARSING ATTEMPT WITH FALLBACKS\nlet parsed;\ntry {\n    parsed = JSON.parse(cleanJson);\n} catch (e) {\n    try {\n        parsed = JSON.parse(cleanJson.replace(/,\\s*}/g, \"}\"));\n    } catch (err) {\n        return { \n            error: \"Structural Failure\", \n            raw_text: cleanJson,\n            order_details: orderDetails,\n            audit_round: currentRound,\n            is_reflection: isReflection,\n            problem_archetype: archetype,\n            mapped_domain: mappedDomain,\n            drivers: drivers,\n            sop_context: sopContext,\n            rejection_reasons_log: rejectionReasonsLog\n        };\n    }\n}\n\n// 4. DYNAMIC DATA MAPPING\nreturn {\n    driver: parsed.identified_driver || archetype,\n    symbolic_mapping: parsed.symbolic_mapping || \"Unmapped\",\n    rationale: parsed.logic_rationale,\n    steps: parsed.proposed_steps || [],\n    communication: parsed.customer_communication,\n    escalation_flag: parsed.escalation_flag || false,\n\n    // --- Stateful Suitcase (Carried Forward Safely) ---\n    order_details: orderDetails,\n    audit_round: currentRound,\n    is_reflection: isReflection,\n    problem_archetype: archetype,\n    mapped_domain: mappedDomain, \n    drivers: drivers,\n    \n    // ─── FIXED TYPO: Restored correct object property mapping key ───\n    sop_context: sopContext,\n    \n    // Forward historical audit logs seamlessly up the execution path\n    rejection_reasons_log: rejectionReasonsLog\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "711ebb34-ffc0-4b15-8dd5-31b1b68c64e2",
+      "name": "Planner_Output_Normalizer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5f2ce23-45b3-4640-a99f-dbabf1b0c2ef",
+              "leftValue": "={{ $json.is_reflection }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        48,
+        48
+      ],
+      "id": "6161599e-eb63-4519-9347-6324543d2324",
+      "name": "Check_Reflection_State"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "eff70e4e-d204-4617-9ec0-d857d391af73",
+              "name": "is_reflection",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "cf5c438b-4310-4f07-9d45-1d8c4aa19610",
+              "name": "feedback_instruction",
+              "value": "=CRITICAL: Your previous plan failed the symbolic or semantic audit. You MUST fix these specific violations: {{ $json.feedback_instruction }}. Please regenerate the plan ensuring it is 100% compliant with the operational SOPs.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        -96
+      ],
+      "id": "5d814341-41e4-4b21-ab99-b9d67cbac6d1",
+      "name": "Format_Reflection_Context"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Check_Reflection_State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_Phi3_Planner": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM_Planner",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_Planner": {
+      "main": [
+        [
+          {
+            "node": "Planner_Output_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner_Output_Normalizer": {
+      "main": [
+        []
+      ]
+    },
+    "Check_Reflection_State": {
+      "main": [
+        [
+          {
+            "node": "Format_Reflection_Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LLM_Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format_Reflection_Context": {
+      "main": [
+        [
+          {
+            "node": "LLM_Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "662f84be-960b-46f5-926a-b59845c02e7d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b11aa79029b222ded93a211ae016ef4d75181caec9a7e8d0a3bc40afe8287f7b"
+  },
+  "id": "Mj9f3J7e6kjRtniT",
+  "tags": []
+}

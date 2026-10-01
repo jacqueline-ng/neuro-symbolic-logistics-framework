@@ -1,0 +1,997 @@
+{
+  "name": "Main_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ml-shap-ingest",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1056,
+        -656
+      ],
+      "id": "13d4c5bb-9473-49dd-8844-20f8d79b52f9",
+      "name": "Webhook",
+      "webhookId": "4e036a35-b752-4f66-b46f-8245ac5cf7d3"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "cdjmQFhJ9M95oG1p",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/cdjmQFhJ9M95oG1p",
+          "cachedResultName": "SOP_RAG_Retrieval_Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -304,
+        -656
+      ],
+      "id": "90fc0793-a298-4194-b8bd-b3a217bbc7b8",
+      "name": "Call 'SOP_RAG_Retrieval_Workflow'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Mj9f3J7e6kjRtniT",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Mj9f3J7e6kjRtniT",
+          "cachedResultName": "Planner_Agent_Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        -320
+      ],
+      "id": "d73855dd-be22-49f1-b0e8-bdfb27db0adf",
+      "name": "Call 'Planner_Agent_Workflow'"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ITwSikInTE2CyGPe",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ITwSikInTE2CyGPe",
+          "cachedResultName": "Evaluator_Agent_Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        -320
+      ],
+      "id": "272d2ce9-afa1-4084-be18-24e3f73b521e",
+      "name": "Call 'Evaluator_Agent_Workflow'"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "10f07074-1604-404c-8e95-6be1ad26e42f",
+              "leftValue": "={{ $json.audit_verdict }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        32,
+        -320
+      ],
+      "id": "346cc52a-1fe9-4911-b0a3-4b24f4921d54",
+      "name": "Check_verdict"
+    },
+    {
+      "parameters": {
+        "sendTo": "logistics-ops-lead@company.org",
+        "subject": "={{ \"URGENT: Manual Intervention Required | Order #\" + ($('Check_verdict').first().json.order_details?.['Order Id'] || $('Check_verdict').first().json.order_details?.['Order Item Id'] || \"UNKNOWN\") + \" | Round \" + ($('Check_verdict').first().json.audit_round || 3) }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333;\">\n    <h2 style=\"color: #d9534f;\"> Human Intervention Required: Neuro-Symbolic Failure</h2>\n    <p>The autonomous logistics agent has reached its maximum retry limit (<b>{{ $('Check_verdict').first().json.audit_round || 3 }} attempts</b>) and failed to produce a plan that satisfies the symbolic safety constraints defined in the DataCo SOP.</p>\n    \n    <div style=\"background-color: #f9f2f4; border: 1px solid #d9534f; padding: 15px; border-radius: 5px;\">\n        <h4 style=\"margin-top: 0; color: #d9534f;\"> Primary Audit Failure Reason:</h4>\n        <p style=\"font-weight: bold;\">{{ $('Check_verdict').first().json.feedback_instruction || $('Check_verdict').first().json.symbolic_critique || $('Check_verdict').first().json.critique || \"Max operational retry limits exhausted.\" }}</p>\n    </div>\n\n    <hr style=\"border: 0; border-top: 1px solid #eee; margin: 20px 0;\">\n\n    <h4> Diagnostic Summary (SHAP Analysis):</h4>\n    <ul>\n        <li><b>Primary Delay Archetype:</b> {{ $('Check_verdict').first().json.problem_archetype || \"Unclassified\" }}</li>\n        <li><b>Top ML Drivers:</b> \n            <ul>\n                {{ $('Check_verdict').first().json.drivers && $('Check_verdict').first().json.drivers.length > 0 ? $('Check_verdict').first().json.drivers.map(d => '<li>' + d.feature + ': <span style=\"color: ' + (d.impact_score > 0 ? 'red' : 'green') + ';\">' + d.impact_score + '</span></li>').join('') : '<li>No high-impact ML drivers found.</li>' }}\n            </ul>\n        </li>\n    </ul>\n\n    <hr style=\"border: 0; border-top: 1px solid #eee; margin: 20px 0;\">\n\n    <h4> Order Context:</h4>\n    <table style=\"width: 100%; border-collapse: collapse;\">\n        <tr>\n            <td style=\"width: 30%; padding: 5px; border-bottom: 1px solid #eee;\"><b>Order ID:</b></td>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\">{{ $('Check_verdict').first().json.order_details ? ($('Check_verdict').first().json.order_details[\"Order Id\"] || $('Check_verdict').first().json.order_details[\"Order Item Id\"] || $('Check_verdict').first().json.order_details[\"order_id\"]) : \"N/A\" }}</td>\n        </tr>\n        <tr>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\"><b>Customer:</b></td>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\">{{ $('Check_verdict').first().json.order_details ? (($('Check_verdict').first().json.order_details[\"Customer Fname\"] || \"\") + \" \" + ($('Check_verdict').first().json.order_details[\"Customer Lname\"] || \"\")) : \"N/A\" }}</td>\n        </tr>\n        <tr>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\"><b>Product:</b></td>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\">{{ $('Check_verdict').first().json.order_details ? ($('Check_verdict').first().json.order_details[\"Product Name\"] || \"N/A\") : \"N/A\" }}</td>\n        </tr>\n        <tr>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\"><b>Order Status:</b></td>\n            <td style=\"padding: 5px; border-bottom: 1px solid #eee;\"><span style=\"background-color: #eee; padding: 2px 5px; border-radius: 3px;\">{{ $('Check_verdict').first().json.order_details ? ($('Check_verdict').first().json.order_details[\"Order Status\"] || \"N/A\") : \"N/A\" }}</span></td>\n        </tr>\n    </table>\n\n    <hr style=\"border: 0; border-top: 1px solid #eee; margin: 20px 0;\">\n\n    <h4> Last Proposed (Rejected) Plan:</h4>\n    <p><b>Rationale:</b> {{ $('Check_verdict').first().json.final_plan ? ($('Check_verdict').first().json.final_plan.rationale || \"N/A\") : ($('Check_verdict').first().json.rationale || \"N/A\") }}</p>\n\n    <p><b>Proposed Steps:</b></p>\n    <ul>\n        {{ $('Check_verdict').first().json.final_plan && $('Check_verdict').first().json.final_plan.steps && $('Check_verdict').first().json.final_plan.steps.length > 0 ? $('Check_verdict').first().json.final_plan.steps.map(s => '<li><b>Step ' + (s.step || '') + ':</b> ' + (s.action || '') + ' <i>(Ref: ' + (s.sop_ref || 'N/A') + ')</i></li>').join('') : '<li><i>No valid steps were successfully generated by the planner agent.</i></li>' }}\n    </ul>\n\n    <div style=\"margin-top: 25px; padding: 15px; background-color: #f4f4f4; border-left: 5px solid #333;\">\n        <p style=\"margin: 0; font-size: 0.9em; font-style: italic;\">\n            <b>Action Required:</b> {{ Number($('Check_verdict').first().json.audit_round || 3) >= 3 ? \"Automated retry limit exhausted per SOP Section 7.3.\" : \"Manual review required due to specific policy constraints identified in the Symbolic Audit.\" }} Please manually review this order in the logistics dashboard.\n        </p>\n    </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        -192
+      ],
+      "id": "af0938c7-d552-4e71-8a89-8f156dd7cc4e",
+      "name": "Send a message",
+      "webhookId": "000e611e-58a4-4dd6-adef-79a182e8b420",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "y4HC4wrJoWInBrls",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cc677062-a45b-4ce5-bbf0-dcbefe1c463e",
+              "leftValue": "={{ $json.audit_round }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        -176
+      ],
+      "id": "ea6c0c8c-18c0-494f-8536-b09b86ec0d33",
+      "name": "Reflexion Loop"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * CONTEXT MULTIPLEXER (v4.8 - Streamlined Reflection State Sync)\n * Responsibility: Merging upstream order suitcases with subflow SOP outputs and loop feedback.\n * Goal: Eliminate the Round 1 reset loop bottleneck by utilizing native n8n input states.\n * Execution Mode: Run once for each item.\n */\n\n// 1. INGRESS DISCOVERY\n// If the workflow has looped back, $json IS the retry packet coming from your aggregator!\nconst incoming = $json;\n\n// Check the wire: Is this active execution a retry cycle from the loop?\nconst isRetry = incoming.audit_verdict === \"RETRY\";\n\n// 2. PRIORITY MERGE LOGIC (If an Auditor demanded a RETRY)\nif (isRetry) {\n    return {\n        // --- CORE OPERATIONAL DATA (Maintained from the loop feedback wire) ---\n        order_id: incoming.order_id,\n        problem_archetype: incoming.problem_archetype,\n        archetype_description: incoming.archetype_description,\n        mapped_domain: incoming.mapped_domain || \"General\",\n        order_details: incoming.order_details, \n        drivers: incoming.drivers || [],\n        sop_context: incoming.sop_context,\n\n        // --- DYNAMIC STATE DATA (Successfully preserves the incremented round!) ---\n        audit_round: Number(incoming.audit_round || 2), \n        is_reflection: true,\n        feedback_instruction: incoming.feedback_instruction || \"Plan rejected. Please revise based on SOP constraints.\",\n\n        // ─── STATE telemetry: Forward rolling loop-back critique logs smoothly down the wire ───\n        rejection_reasons_log: incoming.rejection_reasons_log || \"\"\n    };\n}\n\n// 3. DEFAULT CASE: ROUND 1 (Fresh Ingress from Output_Data_Normalizer / Subflow)\n// If it's the very first run, we defensively ensure our data suitcase is fully loaded.\nlet suitcase = incoming;\nif (!suitcase.order_details) {\n    try {\n        suitcase = $('Output_Data_Normalizer').first().json;\n    } catch(e) {\n        // Fallback to incoming if normalizer is out of scope\n    }\n}\n\nreturn {\n    // --- CORE OPERATIONAL DATA ---\n    order_id: suitcase.order_id,\n    problem_archetype: suitcase.problem_archetype,\n    archetype_description: suitcase.archetype_description,\n    mapped_domain: suitcase.mapped_domain || \"General\",\n    order_details: suitcase.order_details,\n    drivers: suitcase.drivers || [],\n    sop_context: incoming.sop_context || suitcase.sop_context || \"No SOP context available.\",\n\n    // --- INITIAL STATE DATA ---\n    audit_round: Number(suitcase.audit_round) || 1,\n    is_reflection: suitcase.is_reflection || false,\n    feedback_instruction: \"None. This is the initial planning attempt.\",\n    \n    // ─── STATE TELEMETRY: Seamlessly pass initial critique values into the active loop ───\n    rejection_reasons_log: suitcase.rejection_reasons_log || \"\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        -320
+      ],
+      "id": "a17cd04d-5cfc-4ddd-a97f-4bd3b18d6a6c",
+      "name": "Context_Multiplexer"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a precise symbolic-to-semantic routing engine for supply chain governance layer. Your sole job is to analyze the primary target technical metric and its direct semantic meaning, then route it to its matching operational policy domain.\n\nTARGET METRIC FOR EVALUATION:\n- Core Feature Name: {{ $json.problem_archetype }}\n- Target Metric Description: {{ $json.archetype_description }}\n\nCRITICAL RULES:\n- Focus exclusively on the Core Feature Name and its Target Metric Description above. \n- If Core Feature Name contains \"(real)\", immediately reply with: Execution\n- If Core Feature Name contains \"(scheduled)\", immediately reply with: Planning\n- If Core Feature Name contains \"Id\" or \"ID\" and does not match explicit \"Type_\" prefixes, immediately reply with: General\n- Prioritize structural naming indicators (such as tokens beginning with 'Type_') to enforce perfect alignment with the policy governance rules.\n- Do not let downstream timestamps, background order details, or sub-features (like hours or days) distort the classification of the primary target metric.\n- If Feature Name is exactly \"Others\", it MUST map strictly to General.\n- Your output must be exactly one of these seven text values in full: Execution, Planning, Administrative, Product Financial, Temporal Operational, Geographic, or General. DO NOT truncate and add on other text.\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "As the Metadata Ontology Architect, analyze the core metric provided in the system prompt and map it to exactly ONE of the seven corporate operational domains defined in our Standard Operating Procedures (SOP):    1. Execution: Focuses on shipping service commitments, carrier selection, and real-time transit speed performance. (e.g., shipping service levels, transit duration performance, Actual).    2. Planning: Focuses on scheduled vs. real durations, timeline baselines, lead times, and fulfillment scheduling commitments. (e.g., days for shipment scheduled).    3. Administrative: Focuses on transaction types, payment verification holds, administrative clearance, and financial accounting methods. (CRITICAL GUARDRAIL: Every feature token explicitly starting with the prefix \"Type_\"—such as Type_TRANSFER, Type_CASH, Type_DEBIT, or Type_PAYMENT—MUST be mapped strictly to Administrative as mandated by core payment verification criteria).    4. Product/Financial: Focuses on product category constraints, inventory handling regulations, pricing adjustments, SKU profit-margin thresholds, and order earnings. (CRITICAL GUARDRAIL: Features involving \"Benefit\", \"Profit\", \"Earnings\", \"Price\", \"Sales\" MUST map here. Do NOT map payment methods or transaction type tokens containing the \"Type_\" prefix to this domain).    5. Temporal/Operational: Focuses on daily warehouse cutoff times, time-of-day constraints, infrastructure congestion windows, and operational hours. (CRITICAL GUARDRAIL: Only map here if the primary target metric itself is explicitly a time-of-day or hour constraint, such as ship_hour, order_hour, or daypart sequences).    6. Geographic: Focuses on regional delivery limitations, market-specific customs constraints, and international regulatory infrastructure constraints. (e.g., customs logs, regional borders).    7. General: Default fallback category applied ONLY when the primary technical driver does not logically match the definitions of any other operational domain.     CRITICAL OUTPUT CONSTRAINTS: - Reply with ONLY the plain text name of the matched domain. Do not include any conversational text, explanations, punctuation, spaces, warnings, or markdown code-blocks (do NOT use ```text, ```json, or backticks). Your output must be exactly one of these seven text values in full: Execution, Planning, Administrative, Product Financial, Temporal Operational, Geographic, or General."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -736,
+        -656
+      ],
+      "id": "5e41c7c9-0fe2-45ab-ab1e-148158993c0e",
+      "name": "LLM_SOP_Domain_Router"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the incoming payload, automatically handling both wrapped or flat JSON inputs\nconst inputData = $input.first().json;\nconst payload = inputData.body ? inputData.body : inputData;\n\nif (!payload || !payload.order_id) {\n    throw new Error(\"Data Normalizer Error: Incoming Webhook payload is missing order data.\");\n}\n\n// Clean up the annoying leading \":  \" artifact from the python description string\nlet cleanDescription = payload.archetype_description || \"No description provided.\";\nif (cleanDescription.startsWith(\":\")) {\n    cleanDescription = cleanDescription.replace(/^:\\s*/, \"\");\n}\n\n// Output a perfectly structured, clean, flat JSON object for downstream nodes\nreturn {\n    order_id: payload.order_id,\n    problem_archetype: payload.problem_archetype,\n    archetype_description: cleanDescription,\n    order_details: payload.order_details,\n    drivers: payload.drivers || [],\n\n    // ─── STATE ARRAYS: Initialize master state parameters as the root loop anchors ───\n    audit_round: 1,\n    is_reflection: false,\n    rejection_reasons_log: \"\",\n    \n    // ─── NEW: Fixed Start Timestamp ───\n    start_time: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        -656
+      ],
+      "id": "7d90a107-bf9c-46da-b6c5-af51228a7f8c",
+      "name": "Input_Data_Normalizer"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. Unpack the text classification result from the immediate input node\nconst llmResult = $json;\n\n// 2. Pull the original data suitcase from the first normalizer node\nconst sourceData = $('Input_Data_Normalizer').first().json;\n\n// 3. Extract the domain name defensively from the router text\nlet domain = \"General\"; \nif (llmResult.mapped_domain) {\n    domain = llmResult.mapped_domain;\n} else if (llmResult.text) {\n    domain = llmResult.text;\n} else if (typeof llmResult === 'string') {\n    domain = llmResult;\n}\ndomain = domain.trim();\n\n// 4. Repackage all components into a comprehensive data envelope\nreturn {\n    order_id: sourceData.order_id,\n    problem_archetype: sourceData.problem_archetype,\n    archetype_description: sourceData.archetype_description,\n    mapped_domain: domain, \n    order_details: sourceData.order_details, \n    \n    // ALIGNED: Kept as 'drivers' to match what 'SOP_Normalize_Input' expects\n    drivers: sourceData.drivers || [], \n\n    // Carry forward master loop control metrics cleanly without tokens\n    audit_round: sourceData.audit_round || 1,\n    is_reflection: sourceData.is_reflection || false,\n    rejection_reasons_log: sourceData.rejection_reasons_log || \"\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        -656
+      ],
+      "id": "ceb7a94d-ef1f-4fa9-86c2-8f22725f286e",
+      "name": "Output_Data_Normalizer"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Logistics_Audit_Ledger",
+          "cachedResultUrl": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RAGAS_Status": "={{ $json.RAGAS_Status }}",
+            "Answer_Relevance_Score": "={{ $json.Answer_Relevance_Score }}",
+            "Faithfulness_Score": "={{ $json.Faithfulness_Score }}",
+            "Context_Relevance_Score": "={{ $json.Context_Relevance_Score }}",
+            "total_execution_time_ms": "={{ $json.total_execution_time_ms }}",
+            "total_execution_time_sec": "={{ $json.total_execution_time_sec }}",
+            "Timestamp": "={{ $json.timestamp || new Date().toISOString() }}",
+            "Order_ID": "={{ $json.order_details[\"Order Item Id\"] \n\n $json.order_details[\"Order Id\"] }}",
+            "Architecture": "DUAL_AGENT",
+            "Problem_Archetype": "={{ $json.problem_archetype }}",
+            "Policy_Domain": "={{ $json.mapped_domain }}",
+            "Total_Rounds": "={{ $json.audit_round }}",
+            "Escalation_Triggered": "={{ $json.final_plan.escalation_flag }}",
+            "First_Pass_Compliance": "={{ Number($json.audit_round) === 1 }}",
+            "Final_Status": "AUTO APPROVED",
+            "Final_Rationale": "={{ $json.final_plan.rationale }}",
+            "Customer_Message": "={{ $json.final_plan.communication }}",
+            "Rejection_Reasons_Log": "={{ $json.rejection_reasons_log }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Architecture",
+              "displayName": "Architecture",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Problem_Archetype",
+              "displayName": "Problem_Archetype",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Policy_Domain",
+              "displayName": "Policy_Domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total_Rounds",
+              "displayName": "Total_Rounds",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final_Status",
+              "displayName": "Final_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Escalation_Triggered",
+              "displayName": "Escalation_Triggered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Pass_Compliance",
+              "displayName": "First_Pass_Compliance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final_Rationale",
+              "displayName": "Final_Rationale",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Message",
+              "displayName": "Customer_Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rejection_Reasons_Log",
+              "displayName": "Rejection_Reasons_Log",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_execution_time_ms",
+              "displayName": "total_execution_time_ms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_execution_time_sec",
+              "displayName": "total_execution_time_sec",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "RAGAS_Status",
+              "displayName": "RAGAS_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Faithfulness_Score",
+              "displayName": "Faithfulness_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Answer_Relevance_Score",
+              "displayName": "Answer_Relevance_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Context_Relevance_Score",
+              "displayName": "Context_Relevance_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        832,
+        -384
+      ],
+      "id": "d109b2d5-48ca-4dcb-9718-18c12c605f70",
+      "name": "Append_to_Audit_Ledger_Success",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PlH0grfynMjL3DSX",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * FORMAT RAGAS PAYLOAD (v2.1 - Clean Telemetry Mapping)\n * Responsibility: Compile the raw text triplet using the top SHAP anomaly impact features.\n * Maps pre-calculated time metrics directly from Success_Total_Time without fallback fakes.\n */\n\n// 1. TIMING METRICS (Pure mapping from upstream Success_Total_Time node - NO fakes)\nconst finalEvaluatorOutput = $json; \nconst executionTimeSec = finalEvaluatorOutput.total_execution_time_sec || 0;\n\n// 2. STATE & METADATA EXTRACTION\nconst normalizedInput = $('Input_Data_Normalizer').first().json;\n\n// 3. DYNAMIC QUESTION ASSEMBLY (FIXED: Case-insensitive driver array matching)\nconst problemArchetype = finalEvaluatorOutput.problem_archetype || normalizedInput.problem_archetype || \"Unknown Anomaly\";\n\nlet criticalFeatures = [];\ntry {\n    const rawDrivers = finalEvaluatorOutput.drivers || finalEvaluatorOutput.Planning || \n                       normalizedInput.drivers || normalizedInput.Planning;\n                       \n    if (Array.isArray(rawDrivers)) {\n        criticalFeatures = rawDrivers.slice(0, 2).map(f => f.feature);\n    }\n} catch (e) {\n    criticalFeatures = [];\n}\n\nif (criticalFeatures.length === 0) {\n    criticalFeatures = Object.keys(normalizedInput).slice(0, 2);\n}\n\nconst dynamicQuestion = `Policy violation triggered for archetype [${problemArchetype}]. Critical systemic variances identified in features: ${criticalFeatures.join(', ')}. How should the operations group mitigate this risk according to corporate governance constraints?`;\n\n// 4. CONTEXT EXTRACTION (Preserved RAGAS Triplet Architecture)\nlet retrievedContext = \"No context chunks logged\";\ntry {\n    const retrievalNode = $(\"Call 'SOP_RAG_Retrieval_Workflow'\").first().json;\n    retrievedContext = retrievalNode.sop_context || \"No context chunks logged\";\n} catch (e) {\n    retrievedContext = \"Context retrieval mapping error\";\n}\n\n// 5. ANSWER EXTRACTION (Preserved RAGAS Triplet Architecture)\nlet generatedAnswer = \"\";\nconst planObj = finalEvaluatorOutput.final_plan || {};\nif (planObj.rationale) {\n    generatedAnswer += `Rationale: ${planObj.rationale}\\n\\n`;\n}\nif (Array.isArray(planObj.steps)) {\n    generatedAnswer += \"Execution Steps:\\n\" + planObj.steps.map(s => `Step ${s.step}: ${s.action} (Ref: ${s.sop_ref || 'SOP Rules'})`).join(\"\\n\");\n}\nif (finalEvaluatorOutput.communication) {\n    generatedAnswer += `\\n\\nCommunication Response: ${finalEvaluatorOutput.communication}`;\n} else if (planObj.communication) {\n    generatedAnswer += `\\n\\nCommunication Response: ${planObj.communication}`;\n}\n\nif (!generatedAnswer.trim()) {\n    generatedAnswer = typeof finalEvaluatorOutput === 'string' ? finalEvaluatorOutput : \"No plan compiled\";\n}\n\n// 6. HISTORICAL AUDIT LOG EXTRACTION\nconst rejectionReasonsLog = finalEvaluatorOutput.rejection_reasons_log || \"None (Passed on First Attempt)\";\n\n// 7. RETURN UNIFIED TRANSIT DATA ENVELOPE\nreturn [\n  {\n    json: {\n      ...finalEvaluatorOutput, // Carries forward start_time, end_time, total_execution_time_ms/sec cleanly\n      execution_time_sec: executionTimeSec, // Clean pass-through of the true numeric seconds\n      rejection_reasons_log: rejectionReasonsLog,\n      rag_triplet: {\n        archetype: problemArchetype,\n        question: dynamicQuestion,\n        context: retrievedContext,\n        answer: generatedAnswer\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -384
+      ],
+      "id": "00a39191-d98d-4377-aaa1-ebe9fbc253dd",
+      "name": "Format_RAGAS_Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/trigger-ragas",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        -384
+      ],
+      "id": "6149cf54-7730-4b8f-baaa-c95712b8e362",
+      "name": "Trigger_RAGAS_API"
+    },
+    {
+      "parameters": {
+        "model": "phi3:mini",
+        "options": {
+          "temperature": 0,
+          "numPredict": 1024,
+          "penalizeNewline": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        -464
+      ],
+      "id": "f906e2cd-bc6d-469f-b28a-537b1c641606",
+      "name": "LLM_Phi3",
+      "credentials": {
+        "ollamaApi": {
+          "id": "lmXWBQL7Qzbc0gz2",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * SUCCESS TOTAL TIME (v1.1 - Production Ledger Pass-Through)\n * Responsibility: Capture precise end metrics while dynamically preserving \n * 100% of the upstream data payload for direct Google Sheets appending.\n * Execution Mode: Run once for each item.\n */\n\n// 1. Capture the complete incoming data suitcase\nconst incomingSuitcase = $json;\n\nlet startIsoString = \"\";\nlet endIsoString = new Date().toISOString();\nlet totalExecutionTimeMs = 0;\nlet totalExecutionTimeSec = 0;\n\ntry {\n    // Look back to the front gate normalizer to grab the fixed start timestamp\n    startIsoString = $('Input_Data_Normalizer').first().json.start_time;\n    \n    if (startIsoString) {\n        const startTime = new Date(startIsoString).getTime();\n        const endTime = new Date(endIsoString).getTime();\n        \n        // Calculate the execution time metrics\n        totalExecutionTimeMs = endTime - startTime;\n        totalExecutionTimeSec = parseFloat((totalExecutionTimeMs / 1000).toFixed(2));\n    }\n} catch (err) {\n    // Fallback protection for debugging isolated nodes\n    startIsoString = incomingSuitcase.start_time || new Date().toISOString();\n    totalExecutionTimeMs = 0;\n    totalExecutionTimeSec = 0.00;\n}\n\n// 2. Return the absolute entire payload + the newly computed timeline metrics\nreturn {\n    ...incomingSuitcase, // <-- Automatically preserves ALL original fields for Google Sheets / RAGAS\n    \n    // Appends clean timeline telemetry onto the suitcase\n    start_time: startIsoString,\n    end_time: endIsoString,\n    total_execution_time_ms: totalExecutionTimeMs,\n    total_execution_time_sec: totalExecutionTimeSec\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -384
+      ],
+      "id": "fe106376-9ea8-412d-b959-82cebf9d6d35",
+      "name": "Success_Total_Time"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * FAILURE TOTAL TIME (v1.1 - Production Failure Ledger Pass-Through)\n * Responsibility: Capture precise end metrics for the max-escalation path,\n * dynamically preserving 100% of the looped data payload for the failure sheet.\n * Execution Mode: Run once for each item.\n */\n\n// 1. Capture the complete incoming failed iteration suitcase\nconst incomingSuitcase = $json;\n\nlet startIsoString = \"\";\nlet endIsoString = new Date().toISOString();\nlet totalExecutionTimeMs = 0;\nlet totalExecutionTimeSec = 0;\n\ntry {\n    // Look back to the front gate normalizer to grab the fixed start timestamp\n    startIsoString = $('Input_Data_Normalizer').first().json.start_time;\n    \n    if (startIsoString) {\n        const startTime = new Date(startIsoString).getTime();\n        const endTime = new Date(endIsoString).getTime();\n        \n        // Calculate the execution time metrics\n        totalExecutionTimeMs = endTime - startTime;\n        totalExecutionTimeSec = parseFloat((totalExecutionTimeMs / 1000).toFixed(2));\n    }\n} catch (err) {\n    // Fallback protection for debugging isolated nodes\n    startIsoString = incomingSuitcase.start_time || new Date().toISOString();\n    totalExecutionTimeMs = 0;\n    totalExecutionTimeSec = 0.00;\n}\n\n// 2. Return the absolute entire payload + the newly computed timeline metrics\nreturn {\n    ...incomingSuitcase, // <-- Automatically preserves ALL loop tracking fields for your Google Sheet\n    \n    // Appends clean failure timeline telemetry onto the suitcase\n    start_time: startIsoString,\n    end_time: endIsoString,\n    total_execution_time_ms: totalExecutionTimeMs,\n    total_execution_time_sec: totalExecutionTimeSec\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -192
+      ],
+      "id": "92a68a3f-a4fa-4463-96a1-9b270c299438",
+      "name": "Failure_Total_Time"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Logistics_Audit_Ledger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "RAGAS_Status": "={{ $json.RAGAS_Status }}",
+            "Answer_Relevance_Score": "={{ $json.Answer_Relevance_Score }}",
+            "Faithfulness_Score": "={{ $json.Faithfulness_Score }}",
+            "Context_Relevance_Score": "={{ $json.Context_Relevance_Score }}",
+            "total_execution_time_ms": "={{ $json.total_execution_time_ms }}",
+            "total_execution_time_sec": "={{ $json.total_execution_time_sec }}",
+            "Timestamp": "={{ $json.timestamp || new Date().toISOString() }}",
+            "Order_ID": "={{ $json.order_details[\"Order Item Id\"] \n\n $json.order_details[\"Order Id\"] }}",
+            "Architecture": "DUAL_AGENT",
+            "Problem_Archetype": "={{ $json.problem_archetype }}",
+            "Policy_Domain": "={{ $json.mapped_domain }}",
+            "Total_Rounds": "={{ $json.audit_round }}",
+            "Escalation_Triggered": "=TRUE",
+            "First_Pass_Compliance": "={{ Number($json.audit_round) === 1 }}",
+            "Final_Status": "HITL",
+            "Final_Rationale": "={{ $json.final_plan.rationale }}",
+            "Customer_Message": "={{ $json.final_plan.communication }}",
+            "Rejection_Reasons_Log": "={{ $json.rejection_reasons_log }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Architecture",
+              "displayName": "Architecture",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Problem_Archetype",
+              "displayName": "Problem_Archetype",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Policy_Domain",
+              "displayName": "Policy_Domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total_Rounds",
+              "displayName": "Total_Rounds",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final_Status",
+              "displayName": "Final_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Escalation_Triggered",
+              "displayName": "Escalation_Triggered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First_Pass_Compliance",
+              "displayName": "First_Pass_Compliance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final_Rationale",
+              "displayName": "Final_Rationale",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Customer_Message",
+              "displayName": "Customer_Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rejection_Reasons_Log",
+              "displayName": "Rejection_Reasons_Log",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_execution_time_ms",
+              "displayName": "total_execution_time_ms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_execution_time_sec",
+              "displayName": "total_execution_time_sec",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "RAGAS_Status",
+              "displayName": "RAGAS_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Faithfulness_Score",
+              "displayName": "Faithfulness_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Answer_Relevance_Score",
+              "displayName": "Answer_Relevance_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Context_Relevance_Score",
+              "displayName": "Context_Relevance_Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        656,
+        -192
+      ],
+      "id": "2101fe5d-9b8b-4d84-96b1-846b6e2ab173",
+      "name": "Append_to_Audit_Ledger_Failure",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PlH0grfynMjL3DSX",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Input_Data_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'SOP_RAG_Retrieval_Workflow'": {
+      "main": [
+        [
+          {
+            "node": "Context_Multiplexer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Planner_Agent_Workflow'": {
+      "main": [
+        [
+          {
+            "node": "Call 'Evaluator_Agent_Workflow'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Evaluator_Agent_Workflow'": {
+      "main": [
+        [
+          {
+            "node": "Check_verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_verdict": {
+      "main": [
+        [
+          {
+            "node": "Success_Total_Time",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reflexion Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reflexion Loop": {
+      "main": [
+        [
+          {
+            "node": "Failure_Total_Time",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Context_Multiplexer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context_Multiplexer": {
+      "main": [
+        [
+          {
+            "node": "Call 'Planner_Agent_Workflow'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_SOP_Domain_Router": {
+      "main": [
+        [
+          {
+            "node": "Output_Data_Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input_Data_Normalizer": {
+      "main": [
+        [
+          {
+            "node": "LLM_SOP_Domain_Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output_Data_Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Call 'SOP_RAG_Retrieval_Workflow'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format_RAGAS_Payload": {
+      "main": [
+        [
+          {
+            "node": "Trigger_RAGAS_API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger_RAGAS_API": {
+      "main": [
+        [
+          {
+            "node": "Append_to_Audit_Ledger_Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_Phi3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM_SOP_Domain_Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success_Total_Time": {
+      "main": [
+        [
+          {
+            "node": "Format_RAGAS_Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failure_Total_Time": {
+      "main": [
+        [
+          {
+            "node": "Append_to_Audit_Ledger_Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append_to_Audit_Ledger_Failure": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1f71100d-1673-46dd-b011-c226ebbdf6ae",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b11aa79029b222ded93a211ae016ef4d75181caec9a7e8d0a3bc40afe8287f7b"
+  },
+  "id": "4BpWwccQaQnzIiAE",
+  "tags": []
+}

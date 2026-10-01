@@ -1,0 +1,293 @@
+{
+  "name": "Evaluator_Agent_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -384,
+        -160
+      ],
+      "id": "5e00eb43-3caf-4841-b41c-5ad687e16f95",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * STAGE 1: SYMBOLIC REASONING GUARDRAIL (v11.4 - Clean Telemetry Base)\n * Responsibility: Perform symbolic audit and preserve the full 'Suitcase' for HITL or success logs.\n * Execution Mode: Run once for each item.\n */\n\n// 1. RETRIEVE DATA (Loop-Safe Single-Item Syntax)\nconst plannerData = $json;\nconst triggerData = $(\"When Executed by Another Workflow\").item.json;\n\n// --- STATE RECOVERY (The Suitcase) ---\nconst order = plannerData.order_details || triggerData.order_details;\nconst auditRound = plannerData.audit_round || triggerData.audit_round || 1;\nconst isReflection = plannerData.is_reflection || triggerData.is_reflection || false;\nconst archetype = plannerData.problem_archetype || triggerData.problem_archetype;\nconst drivers = plannerData.drivers || triggerData.drivers || [];\nconst sopContext = plannerData.sop_context || triggerData.sop_context;\nconst mappedDomain = plannerData.mapped_domain || triggerData.mapped_domain || \"General\";\n\n// ─── FIXED: Enforce absolute fallback to empty string base ───\nconst historicalRejections = plannerData.rejection_reasons_log || triggerData.rejection_reasons_log || \"\";\n\n// --- 2. CRITICAL: DEFENSIVE CHECK (The \"Bridge\" Pattern) ---\nif (plannerData.error || !order) {\n    return {\n        // Audit Status\n        symbolic_passed: false,\n        symbolic_violations: [\n            plannerData.error === \"Structural Failure\" \n                ? \"STRUCTURAL_FAILURE: The LLM produced invalid JSON and could not be audited.\"\n                : \"MISSING_DATA: No order details found for auditing.\"\n        ],\n        audit_metadata: { \n            safety_gating: \"CRITICAL_FAILURE\",\n            error_mode: true,\n            round: auditRound\n        },\n        \n        // The Suitcase (Carrying forward historical and context data)\n        order_details: order,\n        audit_round: auditRound,\n        is_reflection: isReflection,\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        \n        // Keep metrics alive on structural fallback failure\n        rejection_reasons_log: historicalRejections,\n\n        // Fallback Planner Data\n        planner_plan: {\n            symbolic_mapping: \"Unmapped\",\n            rationale: \"N/A - Parsing Error\",\n            steps: [],\n            communication: plannerData.raw_text || \"Error retrieving communication.\"\n        },\n        context: { \n            status: order ? order[\"Order Status\"] : \"ERROR\",\n            order_id: order ? order[\"Order Id\"] : \"UNKNOWN\"\n        }\n    };\n}\n\n// --- 3. REGULAR AUDIT LOGIC ---\nconst steps = plannerData.steps || [];\nlet symbolic_violations = [];\nlet audit_metadata = {\n    payment_check: \"NOT_REQUIRED\",\n    shipping_check: \"PASSED\",\n    safety_gating: \"ACTIVE\",\n    round: auditRound\n};\n\n// RULE A: PAYMENT-BEFORE-SHIPMENT (SOP Section 5)\nconst isPendingPayment = order[\"Order Status\"] === \"PENDING_PAYMENT\";\nconst hasVerifyPaymentStep = steps.some(s => \n    s.action && (\n        s.action.toLowerCase().includes('verify') || \n        s.action.toLowerCase().includes('payment') ||\n        s.action.toLowerCase().includes('confirm')\n    )\n);\n\nif (isPendingPayment) {\n    audit_metadata.payment_check = \"REQUIRED\";\n    if (!hasVerifyPaymentStep) {\n        symbolic_violations.push(\"Violation: PENDING_PAYMENT requires explicit payment verification [SOP Section 5].\");\n        audit_metadata.payment_check = \"FAILED\";\n    }\n}\n\n// --- 4. PREPARE FINAL OUTPUT (The Unified Suitcase) ---\nreturn {\n    // Audit Results\n    symbolic_passed: symbolic_violations.length === 0,\n    symbolic_violations: symbolic_violations,\n    audit_metadata: audit_metadata,\n    \n    // The Suitcase (Context & Historical Data)\n    order_details: order,\n    audit_round: auditRound,\n    is_reflection: isReflection,\n    problem_archetype: archetype,\n    mapped_domain: mappedDomain,\n    drivers: drivers,\n    sop_context: sopContext,\n    \n    // Secure telemetry parameters for downstream aggregator nodes\n    rejection_reasons_log: historicalRejections,\n\n    // Integrated Planner Data\n    planner_plan: {\n        driver: plannerData.driver || archetype,\n        symbolic_mapping: plannerData.symbolic_mapping || \"Unmapped\",\n        rationale: plannerData.rationale,\n        steps: steps,\n        communication: plannerData.communication,\n        escalation_flag: plannerData.escalation_flag || false\n    },\n    \n    // Quick Reference Context\n    context: {\n        order_id: order[\"Order Id\"] || order[\"order_id\"],\n        status: order[\"Order Status\"] || order[\"order_status\"],\n        product: order[\"Product Name\"] || \"Unknown Item\"\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -160
+      ],
+      "id": "4de267b8-0c13-4add-838e-fa51d3622761",
+      "name": "Symbolic_Audit_Layer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "51923b34-b743-4110-b1ff-81252e9f746e",
+              "leftValue": "={{ $json.symbolic_passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "da8ce623-295e-4102-89ae-416ba727d19c",
+      "name": "Check_Symbolic_Audit"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=### MODE: SEMANTIC_AUDIT\n### AUDIT_ROUND: {{ $json.audit_round || 1 }}\n\n### INPUT DATA FOR REVIEW\n- Original Order Status: {{ $json.order_details[\"Order Status\"] }}\n- Identified Driver: {{ $json.planner_plan.identified_driver }}\n- Logic Rationale: {{ $json.planner_plan.logic_rationale }}\n- Proposed Steps: {{ JSON.stringify($json.planner_plan.proposed_steps) }}\n- Customer Communication: {{ $json.planner_plan.customer_communication }}\n\n### TASK\nCritically evaluate the proposed plan. \n1. Does the 'Logic Rationale' explicitly explain how the identified ML Driver causally justifies EACH of the proposed steps? Implicit or assumed reasoning should be treated as a failure.\n2. CAUSAL LOGIC: Does the 'Logic Rationale' explicitly connect the ML Driver to the proposed steps using a clear cause-and-effect statement? \nBecause the Planner is restricted to under 40 words, accept any rationale that clearly states: [Driver Name] -> [SOP Rule Requirement] -> [Proposed Action Steps]. \nDo not fail a plan for brevity if this causal chain is structurally present.\n\n### OUTPUT JSON FORMAT\n{\n  \"semantic_passed\": boolean,\n  \"critique\": \"string (Detailed feedback if passed is false, otherwise empty)\",\n  \"quality_score\": 0.0,\n  \"logic_check\": \"PASS/FAIL\",\n  \"tone_check\": \"PASS/FAIL\"\n}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "### ROLE  You are the Senior Logistics Quality Auditor at DataCo. Your responsibility is to perform a strict Semantic and Policy Domain Audit on proposed logistics mitigation plans.   ### CONTEXT  The plan you are reviewing has ALREADY passed a Symbolic Audit (hard rule verification). Your job is not to check for baseline rule validation, but to audit the plan for logic, quality, cross-domain contamination, and professional communication standards.   You must act as an objective, fair auditor. Verify that the causal link between the ML driver and the operational action is structurally present in the rationale. If the planner clearly connects the driver to the necessity of the steps, PASS the logic check. Fail the plan only if the rationale is completely unrelated to the driver or the SOP rules.  ### AUDIT CRITERIA  1. DOMAIN BOUNDARY INTEGRITY: Verify that the plan stays strictly within its assigned Policy Domain. If an action or justification leaks into a separate corporate branch unnecessarily, flag it. 2. COHERENCE: Does the Logic Rationale explicitly explain why the specific ML driver causally justifies each step?  3. TONE & SAFETY: Is the Customer Communication professional, clear, empathetic, and entirely free of corporate metrics, internal terminology (SOP, SHAP, Driver), or defensive text?  ### OUTPUT FORMAT CONSTRAINTS - You MUST output ONLY a single, valid JSON object.  - Your response MUST begin with the character '{' and end immediately after the final closing brace '}'.  - DO NOT use markdown code blocks (NO ```json).  - DO NOT add any pre-amble, post-amble, or conversational filler.  ### OUTPUT JSON FORMAT {   \"semantic_passed\": boolean,   \"critique\": \"string (Detailed actionable feedback identifying explicit logical, domain, or tone failures if semantic_passed is false, otherwise leave blank)\",   \"logic_check\": \"PASS/FAIL\",   \"tone_check\": \"PASS/FAIL\",   \"quality_score\": 0.0 }"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        192,
+        -288
+      ],
+      "id": "4733988e-9b3f-4c2d-95cd-8a0e9cce664a",
+      "name": "LLM_Semantic_Reviewer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a32a1c48-4209-4588-bdc0-ae4b779bbf2d",
+              "leftValue": "={{ $json.semantic_passed }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        464,
+        -288
+      ],
+      "id": "15c144b1-899c-448c-abc3-929ba9735f48",
+      "name": "Check_Semantic_Audit"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * PREPARE SYMBOLIC CRITIQUE (v4.5 - Token Cleanup)\n * Responsibility: Convert symbolic violations into actionable instructions and increment the loop state.\n * Goal: Ensure the Planner has the 'SOP Evidence' to fix its logic in the next round without clearing past histories.\n * Execution Mode: Run once for each item.\n */\n\n// 1. RETRIEVE AUDIT RESULTS (Single-Item Loop Mode)\nconst auditResult = $json;\nconst violations = auditResult.symbolic_violations || [];\n\n// 2. THE SUITCASE RECOVERY\nconst order = auditResult.order_details;\nconst archetype = auditResult.problem_archetype;\nconst drivers = auditResult.drivers || [];\nconst sopContext = auditResult.sop_context;\nconst currentRound = auditResult.audit_round || 1;\nconst mappedDomain = auditResult.mapped_domain || \"General\";\n\n// Pull historical rejections from loop context memory\nconst historicalRejections = auditResult.rejection_reasons_log || \"\";\n\n// 3. CRITIQUE GENERATOR (Instruction Engineering)\nconst critiqueString = violations.length > 0\n    ? violations.join('. ')\n    : \"The plan failed general operational compliance checks.\";\n\nconst feedbackInstruction = `AI Audit Failed. Problem: ${critiqueString}. Instructions: Please revise the logic rationale and recreate the proposed_steps to fix this specific compliance issue using the provided SOP Context and SHAP Drivers.`;\n\n// String builder to append new symbolic blockages onto history\nconst currentCritique = `[Round ${currentRound} - ${mappedDomain} (SYMBOLIC)]: ${critiqueString}`;\nconst updatedRejectionsLog = historicalRejections \n    ? `${historicalRejections} | ${currentCritique}`\n    : currentCritique;\n\n// 4. PREPARE THE LOOP PACKET\nreturn {\n    // --- Loop Control ---\n    audit_verdict: \"RETRY\",\n    audit_round: currentRound + 1, // Increment the counter for retry tracking\n    is_reflection: true,\n    feedback_instruction: feedbackInstruction,\n    \n    // Pack rolling history string into next loop turn memory wire\n    rejection_reasons_log: updatedRejectionsLog,\n    \n    // --- The Suitcase (Carrying forward for the next Planner attempt) ---\n    order_details: order,\n    problem_archetype: archetype,\n    mapped_domain: mappedDomain, \n    drivers: drivers,\n    sop_context: sopContext,\n    \n    // --- Audit Metadata (For the Final Aggregator/Logging) ---\n    planner_plan: auditResult.planner_plan,\n    symbolic_critique: critiqueString,\n    context: {\n        // Added defensive fallback protections for dictionary spacing differences\n        order_id: order ? (order[\"Order Id\"] || order[\"order_id\"] || \"UNKNOWN\") : \"UNKNOWN\",\n        status: order ? (order[\"Order Status\"] || order[\"order_status\"] || \"N/A\") : \"N/A\"\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        16
+      ],
+      "id": "bf4afe02-4c22-4651-b724-8de090e93596",
+      "name": "Prepare_Symbolic_Critique"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * SYMBOLIC OUTPUT AGGREGATOR (v3.8 - Clean Telemetry Integration)\n * Responsibility: Standardize the final output for the main loop, preserving the full audit trail.\n * Goal: Eliminate the static lookback trap to prevent loop round stalls on symbolic failures.\n * Execution Mode: Run once for each item.\n */\n\n// 1. DATA RETRIEVAL (Neural + Symbolic - Loop Safe)\nconst inputData = $json;\n\n// Shifted lookback anchor to Context_Multiplexer to capture the active live loop state!\nconst liveContext = $(\"When Executed by Another Workflow\").item.json; \n\n// 2. SUITCASE RECOVERY (The Source of Truth)\nconst order = liveContext.order_details;\nconst archetype = liveContext.problem_archetype;\nconst drivers = liveContext.drivers || [];\nconst sopContext = liveContext.sop_context;\nconst mappedDomain = liveContext.mapped_domain || \"General\";\nconst currentRound = Number(liveContext.audit_round || 1);\n\n// Recover historical rejections from past loop turns\nconst historicalRejections = liveContext.rejection_reasons_log || \"\";\n\n// 3. AUDIT STATUS IDENTIFICATION\nconst isRetry = inputData.audit_verdict === \"RETRY\" || inputData.symbolic_passed === false;\nconst isSuccess = inputData.symbolic_passed === true && !isRetry;\n\n// 4. VERDICT PROCESSING\nif (isSuccess) {\n    /**\n     * BRANCH: SUCCESS SUITCASE (Pre-Approved Transaction)\n     * Requirement: Provide high-fidelity logs for auto-approval.\n     */\n    return {\n        audit_verdict: \"SUCCESS\",\n        is_reflection: false,\n        audit_round: currentRound,\n        \n        // --- Execution Data (The Plan) ---\n        final_plan: inputData.planner_plan,\n        order_details: order,\n        \n        // --- Compliance Metadata (For Logs) ---\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        \n        // ─── FIXED: Forward completed trace text directly without placeholder text pollution ───\n        rejection_reasons_log: historicalRejections || \"\",\n        \n        audit_metadata: inputData.audit_metadata || { safety_gating: \"PASSED\" },\n        \n        // --- Audit Justification ---\n        message: \"Plan passed symbolic validation and is cleared for automated resolution.\"\n    };\n} else {\n    /**\n     * BRANCH: RETRY SUITCASE (Reflexion Loop)\n     * Requirement: Record exhaustion of retries and provide correction feedback.\n     */\n    \n    // String builder to append new symbolic failure reasons onto running history\n    const currentCritique = `[Round ${currentRound} - Symbolic]: ${inputData.symbolic_critique || inputData.reason || \"Violated hard compliance constraints.\"}`;\n    const updatedRejectionsLog = historicalRejections \n        ? `${historicalRejections} | ${currentCritique}`\n        : (inputData.rejection_reasons_log || currentCritique);\n\n    return {\n        audit_verdict: \"RETRY\",\n        is_reflection: true,\n        \n        // Progresses smoothly to Round 3, 4, etc., by using the active multiplexer state\n        audit_round: Number(inputData.audit_round || currentRound + 1),\n        \n        // --- Context Persistence (The Suitcase) ---\n        order_details: order,\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        \n        // ─── FIXED: Forward the clean rolling tracking string base down the loop memory wire ───\n        rejection_reasons_log: updatedRejectionsLog,\n        \n        // --- Feedback Loop Metadata ---\n        reason: inputData.reason || \"SYMBOLIC_VIOLATION\",\n        feedback_instruction: inputData.feedback_instruction || inputData.symbolic_critique || \"Plan rejected by symbolic audit. Please revise based on SOP constraints.\",\n        symbolic_critique: inputData.symbolic_critique || \"Audit failed hard compliance rules.\",\n        planner_plan: inputData.planner_plan || null\n    };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        16
+      ],
+      "id": "f7fb8111-5419-40f8-ba42-e7b667acdcb6",
+      "name": "Symbolic_Output_Aggregator"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * SEMANTIC OUTPUT AGGREGATOR (v8.8 - Cleanup Verification)\n * Responsibility: Consolidate the Symbolic PASS with the Semantic Review result without resetting loop metrics.\n * Execution Mode: Run once for each item.\n */\n\n// 1. STATE RECOVERY (Targeted to live loop nodes)\nconst inputData = $json;\nconst liveContext = $(\"When Executed by Another Workflow\").item.json;\nconst symbolicAudit = $(\"Symbolic_Audit_Layer\").item.json;\n\nconst order = liveContext.order_details;\nconst archetype = liveContext.problem_archetype;\nconst drivers = liveContext.drivers || [];\nconst sopContext = liveContext.sop_context;\nconst currentRound = Number(liveContext.audit_round || 1); // Resolves the Round 2 bottleneck!\nconst mappedDomain = liveContext.mapped_domain || \"General\";\n\n// Recover historical rejections from past loop turns\nconst historicalRejections = liveContext.rejection_reasons_log || \"\";\n\n// 2. SEMANTIC PARSING\nlet semanticResult = { semantic_passed: false, critique: \"Parsing Failure\" };\ntry {\n    const rawText = inputData.text || \"\";\n    const start = rawText.indexOf('{');\n    const end = rawText.lastIndexOf('}');\n    if (start !== -1 && end !== -1) {\n        semanticResult = JSON.parse(rawText.substring(start, end + 1));\n    }\n} catch (e) {\n    semanticResult.critique = \"LLM Formatting Error: The semantic reviewer failed to produce valid JSON.\";\n}\n\nconst success = semanticResult.semantic_passed === true;\n\n// 3. THE RETURN\nif (success) {\n    return {\n        audit_verdict: \"SUCCESS\",\n        is_reflection: false,\n        audit_round: currentRound,\n        final_plan: symbolicAudit.planner_plan,\n        order_details: order,\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        \n        // ─── FIXED: Clean pass-through with no fallback string contamination ───\n        rejection_reasons_log: historicalRejections || \"\",\n        \n        // ─── FIXED: Purged of static quality metric artifacts ───\n        audit_metadata: {\n            symbolic: \"PASSED\",\n            semantic: \"PASSED\",\n            safety_gating: \"ACTIVE\"\n        },\n        message: \"Plan cleared symbolic guardrails and semantic logic review.\"\n    };\n} else {\n    // String builder to join new error onto old history trail\n    const currentCritique = `[Round ${currentRound} - ${mappedDomain}]: ${semanticResult.critique || \"Failed semantic checks.\"}`;\n    const updatedRejectionsLog = historicalRejections \n        ? `${historicalRejections} | ${currentCritique}`\n        : currentCritique;\n\n    return {\n        audit_verdict: \"RETRY\",\n        is_reflection: true,\n        audit_round: currentRound + 1, // Progresses smoothly to Round 3, Round 4, etc.\n        feedback_instruction: `SEMANTIC CRITIQUE: ${semanticResult.critique || \"Plan failed semantic validation checks.\"}`,\n        order_details: order,\n        problem_archetype: archetype,\n        mapped_domain: mappedDomain,\n        drivers: drivers,\n        sop_context: sopContext,\n        planner_plan: symbolicAudit.planner_plan,\n        failure_type: \"SEMANTIC\",\n        \n        // Pass the rolling text package forward into the loop memory wire\n        rejection_reasons_log: updatedRejectionsLog,\n        \n        // ─── FIXED: Purged of static quality metric artifacts ───\n        audit_metadata: {\n            symbolic: \"PASSED\",\n            semantic: \"FAILED\"\n        }\n    };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -160
+      ],
+      "id": "e6d70ed6-8f3e-4b03-803f-9cc737b91447",
+      "name": "Semantic_Output_Aggregator"
+    },
+    {
+      "parameters": {
+        "model": "phi3:mini",
+        "options": {
+          "temperature": 0,
+          "numPredict": 2048
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        192,
+        -112
+      ],
+      "id": "1e26b317-d022-41d0-86ee-9f5021d89ea1",
+      "name": "LLM_Phi3_Evaluator",
+      "credentials": {
+        "ollamaApi": {
+          "id": "lmXWBQL7Qzbc0gz2",
+          "name": "Ollama account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Symbolic_Audit_Layer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Symbolic_Audit_Layer": {
+      "main": [
+        [
+          {
+            "node": "Check_Symbolic_Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_Symbolic_Audit": {
+      "main": [
+        [
+          {
+            "node": "LLM_Semantic_Reviewer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare_Symbolic_Critique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_Semantic_Reviewer": {
+      "main": [
+        [
+          {
+            "node": "Check_Semantic_Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_Semantic_Audit": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Semantic_Output_Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare_Symbolic_Critique": {
+      "main": [
+        [
+          {
+            "node": "Symbolic_Output_Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM_Phi3_Evaluator": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LLM_Semantic_Reviewer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "5461480a-a5a7-435d-a43e-96edac2fbfe0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b11aa79029b222ded93a211ae016ef4d75181caec9a7e8d0a3bc40afe8287f7b"
+  },
+  "id": "ITwSikInTE2CyGPe",
+  "tags": []
+}
