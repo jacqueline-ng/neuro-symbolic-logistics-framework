@@ -1,4 +1,4 @@
-# A Neuro-Symbolic Multi-Agent Framework for Autonomous Supply Chain Mitigation
+# A Neuro-Symbolic Multi-Agent Workflow for Autonomous Supply Chain Mitigation
 
 This repository hosts the replication artifacts, orchestration workflows, and diagnostic code for the methodology paper submitted to *MethodsX*.
 
