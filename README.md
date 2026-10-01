@@ -27,15 +27,16 @@ This repository hosts the replication artifacts, orchestration workflows, and di
    pip install -r requirements.txt
    ```
 2.  **Ingest SOP Knowledge Base:**
+    Place Standard_Operating_Procedure_v1_1.docx (provided with manuscript supplementary files) into the root directory.
     Execute scripts/stage1_SOP_Ingestion.ipynb to chunk and embed SOP v1.1 into the local Qdrant collection (dataco_supply_chain_sops).
 
-3.  **Import Workflows into n8n:**
+4.  **Import Workflows into n8n:**
     Open the n8n web interface at http://localhost:5678.
     For each workflow JSON in /workflows/ (00_main_orchestrator.json, 01_sop_rag_retrieval.json, 02_planner_agent.json, 03_evaluator agent.json), go to Workflows -> Import from File.
     Configure the local Ollama node credentials pointing to your running Phi-3 instance ([http://host.docker.internal:11434](http://host.docker.internal:11434) or local host network).
     Activate all workflows to initialize webhook endpoints.
 
-4.  **Trigger Predictive Diagnostics & Benchmark Suite:**
+5.  **Trigger Predictive Diagnostics & Benchmark Suite:**
     Open and run scripts/stage2_Predictive_Diagnostics.ipynb.
     This notebook trains the XGBoost late delivery classifier, extracts global and local SHAP feature drivers, and executes the interactive test harness to dispatch test cases from data/curated_late_delivery_test_suite.csv to the orchestrator webhook.
     Execution traces, reflection iterations, and audit metrics are recorded in data/Logistics_Audit_Ledger.csv.
